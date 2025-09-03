@@ -25,20 +25,16 @@ jobs:
           chmod +x repo
           sudo mv repo /usr/local/bin/
 
-      - name: Clean AOSP workspace
-        run: rm -rf aosp || true
-
-      - name: Init minimal AOSP workspace
+      - name: Init minimal AOSP workspace in fresh folder
         run: |
-          mkdir -p aosp && cd aosp
+          BUILD_DIR=aosp_build_$(date +%s)
+          mkdir -p $BUILD_DIR && cd $BUILD_DIR
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-          # ลบ .repo ก่อน init เผื่อ cache เก่า
-          rm -rf .repo || true
-
-          # ใช้ tag เดียวกันทั้ง workspace
-          repo init -u https://android.googlesource.com/platform/manifest -b refs/tags/android-15.0.0_r36 --depth=1
+          # init repo
+          repo init -u https://android.googlesource.com/platform/manifest \
+            -b refs/tags/android-15.0.0_r36 --depth=1
 
           # local_manifests: ดึงเฉพาะโปรเจ็กต์ที่ aapt2 ต้องใช้
           mkdir -p .repo/local_manifests
@@ -67,12 +63,15 @@ jobs:
           </manifest>
           EOF
 
-          # sync โค้ดเฉพาะที่ต้องใช้
+          # sync code
           repo sync -c -j4 --no-clone-bundle --no-tags --optimized-fetch --prune --force-sync
 
+          # save build dir path for next steps
+          echo "BUILD_DIR=$BUILD_DIR" >> $GITHUB_ENV
+
       - name: Patch Android.bp for device .so + 16KB
-        working-directory: aosp/frameworks/base/tools/aapt2
         run: |
+          cd $BUILD_DIR/frameworks/base/tools/aapt2
           if ! grep -q "libaapt2_device" Android.bp; then
             cat >> Android.bp <<'EOF'
             cc_library_shared {
@@ -183,15 +182,15 @@ jobs:
           fi
 
       - name: Build with Soong
-        working-directory: aosp
         run: |
+          cd $BUILD_DIR
           source build/envsetup.sh
           lunch aosp_arm64-eng
           m libaapt2_device
 
       - name: Show and verify Align
-        working-directory: aosp
         run: |
+          cd $BUILD_DIR
           SO_PATH=$(find out -type f -name "libaapt2_device.so" | head -n1)
           echo "FOUND: $SO_PATH"
           readelf -lW "$SO_PATH" | egrep "LOAD|Align" || true
@@ -203,8 +202,11 @@ jobs:
           fi
 
       - name: Upload artifact (.so)
+        run: |
+          cd $BUILD_DIR
+          SO_PATH=$(find out -type f -name "libaapt2_device.so" | head -n1)
+          echo "Uploading $SO_PATH"
         uses: actions/upload-artifact@v4
         with:
           name: libaapt2-device-16kb
-          path: |
-            aosp/out/**/libaapt2_device.so
+          path: $BUILD_DIR/out/**/libaapt2_device.so
