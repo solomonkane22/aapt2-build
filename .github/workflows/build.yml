@@ -32,8 +32,7 @@ jobs:
           git config --global user.name "GitHub Actions"
 
           # ใช้ manifest ทางการ (ระบุ branch/tag ชัดเจน)
-          repo init -u https://android.googlesource.com/platform/manifest -b android-14.0.0_r84
-
+          repo init -u https://android.googlesource.com/platform/manifest -b refs/tags/android-14.0.0_r84 --depth=1
           # local_manifests: ดึงเฉพาะโปรเจ็กต์ที่ aapt2 ต้องใช้
           mkdir -p .repo/local_manifests
           cat > .repo/local_manifests/minimal.xml <<'EOF'
