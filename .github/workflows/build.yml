@@ -34,9 +34,13 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
+          # ลบ .repo ก่อน init เผื่อ cache เก่า
+          rm -rf .repo || true
+
           # ใช้ tag เดียวกันทั้ง workspace
           repo init -u https://android.googlesource.com/platform/manifest -b refs/tags/android-15.0.0_r36 --depth=1
 
+          # local_manifests: ดึงเฉพาะโปรเจ็กต์ที่ aapt2 ต้องใช้
           mkdir -p .repo/local_manifests
           cat > .repo/local_manifests/minimal.xml <<'EOF'
           <manifest>
@@ -63,6 +67,7 @@ jobs:
           </manifest>
           EOF
 
+          # sync โค้ดเฉพาะที่ต้องใช้
           repo sync -c -j4 --no-clone-bundle --no-tags --optimized-fetch --prune --force-sync
 
       - name: Patch Android.bp for device .so + 16KB
