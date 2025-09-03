@@ -1,37 +1,47 @@
 name: Build libaapt2.so
 
 on:
-  workflow_dispatch: # ให้กด run เองได้จากหน้า GitHub
+  workflow_dispatch:  # ให้กด Run เองได้จาก GitHub
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ANDROID_NDK_HOME: /usr/local/android-ndk  # สำหรับ cross compile ถ้าจำเป็น
+      JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+    - name: Checkout repo
+      uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential ninja-build cmake unzip
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential git cmake ninja-build openjdk-11-jdk python3 unzip
 
-      - name: Install Android SDK + NDK
-        uses: android-actions/setup-android@v3
-        with:
-          sdk-version: 34
-          ndk-version: 28.0.12433566 # รองรับ 16KB page size
+    - name: Download AOSP aapt2 source
+      run: |
+        mkdir aosp && cd aosp
+        git clone https://android.googlesource.com/platform/frameworks/base.git
+        cd base/tools/aapt2
+        git checkout master  # หรือ tag ที่ต้องการ
 
-      - name: Build libaapt2.so
-        run: |
-          echo "⚡ ที่นี่คือที่คุณต้องใส่คำสั่ง build จริงของ aapt2"
-          echo "เช่น cmake หรือ ./gradlew ตามโปรเจกต์ของคุณ"
-          # ตอนนี้ผมใส่ placeholder ไว้ก่อน
-          mkdir -p build/lib/arm64-v8a
-          echo "fake-binary" > build/lib/arm64-v8a/libaapt2.so
+    - name: Patch Android.bp for 16KB
+      run: |
+        cd aosp/base/tools/aapt2
+        # เพิ่ม ldflags ให้ Align 16KB
+        sed -i '/cc_library_host_static {/a \
+        \    ldflags: ["-Wl,-z,max-page-size=16384","-Wl,-z,common-page-size=16384"],' Android.bp
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: libaapt2
-          path: build/lib/arm64-v8a/libaapt2.so
+    - name: Build libaapt2.so
+      run: |
+        cd aosp
+        source build/envsetup.sh
+        lunch aosp_arm64-eng
+        m libaapt2
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: libaapt2-so
+        path: aosp/out/host/linux-x86/bin/libaapt2.so
