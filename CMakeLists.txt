@@ -19,9 +19,8 @@ add_compile_options(
 
 # รวม include directories (header libs)
 include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/jni_headers
-    ${CMAKE_CURRENT_SOURCE_DIR}/native_headers
-    ${CMAKE_CURRENT_SOURCE_DIR}/aapt2/androidfw
+    ${CMAKE_CURRENT_SOURCE_DIR}appt2/androidfw
+    ${CMAKE_CURRENT_SOURCE_DIR}appt2/android-base
 )
 
 # หาไฟล์ source ทุก folder ตาม android.bp
