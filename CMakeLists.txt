@@ -1,46 +1,77 @@
-name: Build libaapt2.so (ARM64, 16KB page)
+cmake_minimum_required(VERSION 3.10)
+project(libaapt2 LANGUAGES CXX)
 
-on:
-  workflow_dispatch:
+# ตั้งค่า C++ standard
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS ON)
 
-jobs:
-  build:
-    runs-on: ubuntu-22.04
+# เพิ่ม compile flags
+add_compile_options(
+    -Wall
+    -Werror
+    -Wno-unused-parameter
+    -Wno-missing-field-initializers
+    -fno-exceptions
+    -fno-rtti
+    -Wno-deprecated-declarations
+)
 
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+# รวม include directories (header libs)
+include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/jni_headers
+    ${CMAKE_CURRENT_SOURCE_DIR}/native_headers
+)
 
-      - name: Install deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build protobuf-compiler cmake p7zip-full
+# หาไฟล์ source ทุก folder ตาม android.bp
+file(GLOB_RECURSE TOOL_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmd/*.cpp
+)
 
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r26d
-          add-to-path: true
+# สมมติ CMakeLists.txt อยู่ใน aapt2/
+file(GLOB_RECURSE LIB_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/compile/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/configuration/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/dump/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/filter/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/format/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/io/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/link/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/optimize/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/process/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/split/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/text/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/util/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/java/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/trace/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/xml/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Debug.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/DominatorTree.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/LoadedApk.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Resource.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ResourceParser.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ResourceTable.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ResourceUtils.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ResourceValues.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SdkConstants.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ValueTransformer.cpp
+)
 
-      - name: Extract aapt2 sources
-        run: |
-          mkdir -p aapt2
-          7z x base-refs_heads_main-tools-aapt2.7z.001 -oaapt2
+file(GLOB_RECURSE PROTO_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/*.proto
+)
 
-      - name: Configure CMake
-        run: |
-          cmake -S . -B build \
-            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
-            -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-29 \
-            -DCMAKE_BUILD_TYPE=Release \
-            -G Ninja
+# สร้าง libaapt2 static library
+add_library(libaapt2 STATIC
+    ${LIB_SOURCES}
+    ${PROTO_FILES}
+)
 
-      - name: Build libaapt2
-        run: cmake --build build --config Release -j$(nproc)
+# เพิ่ม linker flags
+set_target_properties(libaapt2 PROPERTIES
+    LINK_FLAGS "-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
+)
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: libaapt2
-          path: build/libaapt2.so
+# สร้าง executable aapt2
+add_executable(aapt2 Main.cpp ${TOOL_SOURCES})
+target_link_libraries(aapt2 libaapt2)
