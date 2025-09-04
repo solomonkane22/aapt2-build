@@ -1,0 +1,141 @@
+name: Build libaapt2.so (arm64-v8a, 16KB page)
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Ubuntu • NDK r26d • arm64-v8a
+    runs-on: ubuntu-22.04
+
+    env:
+      ANDROID_ABI: arm64-v8a
+      ANDROID_API: 24
+      BUILD_TYPE: Release
+      # บังคับ 16KB page size สำหรับลิงก์เกอร์ lld (Android)
+      PAGE_16K_LDFLAGS: "-Wl,-z,max-page-size=16384"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends build-essential ninja-build cmake unzip
+
+      - name: Setup Android NDK
+        id: ndk
+        uses: android-actions/setup-ndk@v3
+        with:
+          ndk-version: r26d
+
+      - name: Show toolchain info
+        run: |
+          echo "NDK: ${{ steps.ndk.outputs.ndk-path }}"
+          ${{
+            steps.ndk.outputs.ndk-path
+          }}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --version
+          cmake --version
+          ninja --version
+
+      - name: Build (auto-detect CMake or ndk-build)
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          NDK="${{ steps.ndk.outputs.ndk-path }}"
+          TOOLCHAIN="${NDK}/toolchains/llvm/prebuilt/linux-x86_64"
+          export ANDROID_NDK_HOME="$NDK"
+
+          # สร้างโฟลเดอร์เก็บผลลัพธ์
+          OUT_DIR="$GITHUB_WORKSPACE/out/${ANDROID_ABI}"
+          mkdir -p "$OUT_DIR"
+
+          if [ -f "CMakeLists.txt" ]; then
+            echo "==> Detected CMake project"
+            mkdir -p build && cd build
+
+            cmake -G Ninja \
+              -DANDROID_ABI="${ANDROID_ABI}" \
+              -DANDROID_PLATFORM="android-${ANDROID_API}" \
+              -DANDROID_STL="c++_shared" \
+              -DCMAKE_TOOLCHAIN_FILE="${NDK}/build/cmake/android.toolchain.cmake" \
+              -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
+              -DCMAKE_C_FLAGS="${CMAKE_C_FLAGS:-} -fPIC" \
+              -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS:-} -fPIC" \
+              -DCMAKE_SHARED_LINKER_FLAGS="${CMAKE_SHARED_LINKER_FLAGS:-} ${PAGE_16K_LDFLAGS}" \
+              -DCMAKE_EXE_LINKER_FLAGS="${CMAKE_EXE_LINKER_FLAGS:-} ${PAGE_16K_LDFLAGS}" \
+              ..
+
+            cmake --build . --config "${BUILD_TYPE}" -- -v
+
+            # ค้นหา libaapt2.so ที่ build ได้
+            SO_PATH="$(find . -type f -name 'libaapt2.so' | head -n 1 || true)"
+            if [ -z "$SO_PATH" ]; then
+              echo "::error::ไม่พบไฟล์ libaapt2.so จาก CMake target. โปรดตรวจสอบว่า target ถูกตั้งชื่อเป็น shared library ชื่อ libaapt2.so"
+              exit 1
+            fi
+
+            cp -f "$SO_PATH" "$OUT_DIR/libaapt2.so"
+
+          elif [ -f "Android.mk" ] || [ -f "jni/Android.mk" ]; then
+            echo "==> Detected ndk-build project"
+            # โฟลเดอร์ที่มี Android.mk (รองรับแบบวางใน root หรือ jni/)
+            NDK_MK_DIR="."
+            [ -f "jni/Android.mk" ] && NDK_MK_DIR="jni"
+
+            # โฟลเดอร์ปลายทาง libs
+            LIBS_OUT="$GITHUB_WORKSPACE/obj/libs"
+
+            make -v || true # แสดงเวอร์ชัน make (บางโปรเจ็กต์ใช้)
+
+            "${NDK}/ndk-build" -C "$NDK_MK_DIR" \
+              NDK_PROJECT_PATH="$NDK_MK_DIR" \
+              NDK_LIBS_OUT="$LIBS_OUT" \
+              APP_PLATFORM="android-${ANDROID_API}" \
+              APP_ABI="${ANDROID_ABI}" \
+              APP_STL="c++_shared" \
+              NDK_TOOLCHAIN_VERSION=clang \
+              APP_LDFLAGS="${PAGE_16K_LDFLAGS}" \
+              V=1
+
+            SO_PATH="$(find "$LIBS_OUT/${ANDROID_ABI}" -type f -name 'libaapt2.so' | head -n 1 || true)"
+            if [ -z "$SO_PATH" ]; then
+              echo "::error::ไม่พบไฟล์ libaapt2.so จาก ndk-build. โปรดตรวจสอบ module ชื่อและการสร้าง shared library"
+              exit 1
+            fi
+
+            cp -f "$SO_PATH" "$OUT_DIR/libaapt2.so"
+          else
+            echo "::error::ไม่พบ CMakeLists.txt หรือ Android.mk โปรดเพิ่มไฟล์บิลด์อย่างใดอย่างหนึ่ง"
+            exit 1
+          fi
+
+          # strip ให้ขนาดเล็กลง
+          "${TOOLCHAIN}/bin/llvm-strip" -S "$OUT_DIR/libaapt2.so" || true
+
+          # รายงานผลลัพธ์
+          echo "ARTIFACT_DIR=$OUT_DIR" >> "$GITHUB_OUTPUT"
+          echo "Built => $OUT_DIR/libaapt2.so"
+
+      - name: Upload artifact (libaapt2.so)
+        uses: actions/upload-artifact@v4
+        with:
+          name: libaapt2-${{ env.ANDROID_ABI }}-page16k
+          path: ${{ steps.build.outputs.ARTIFACT_DIR }}/libaapt2.so
+          if-no-files-found: error
+
+      - name: (Optional) Copy to typical jniLibs path layout
+        if: always()
+        run: |
+          OUT_LAYOUT="$GITHUB_WORKSPACE/out/jniLibs/${ANDROID_ABI}"
+          mkdir -p "$OUT_LAYOUT"
+          cp -f "$GITHUB_WORKSPACE/out/${ANDROID_ABI}/libaapt2.so" "$OUT_LAYOUT/"
+          echo "jniLibs layout: $OUT_LAYOUT"
