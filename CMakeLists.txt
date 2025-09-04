@@ -73,5 +73,5 @@ set_target_properties(libaapt2 PROPERTIES
 )
 
 # สร้าง executable aapt2
-add_executable(aapt2 Main.cpp ${TOOL_SOURCES})
+add_executable(aapt2 aapt2/Main.cpp ${TOOL_SOURCES})
 target_link_libraries(aapt2 libaapt2)
