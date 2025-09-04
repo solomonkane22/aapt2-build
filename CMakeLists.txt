@@ -25,40 +25,40 @@ include_directories(
 
 # หาไฟล์ source ทุก folder ตาม android.bp
 file(GLOB_RECURSE TOOL_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/cmd/*.cpp
+    aapt2/cmd/*.cpp
 )
 
 # สมมติ CMakeLists.txt อยู่ใน aapt2/
 file(GLOB_RECURSE LIB_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/compile/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/configuration/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/dump/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/filter/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/format/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/io/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/link/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/optimize/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/process/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/split/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/text/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/util/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/java/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/trace/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/xml/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Debug.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/DominatorTree.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/LoadedApk.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Resource.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ResourceParser.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ResourceTable.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ResourceUtils.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ResourceValues.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/SdkConstants.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ValueTransformer.cpp
+    aapt2/compile/*.cpp
+    aapt2/configuration/*.cpp
+    aapt2/dump/*.cpp
+    aapt2/filter/*.cpp
+    aapt2/format/*.cpp
+    aapt2/io/*.cpp
+    aapt2/link/*.cpp
+    aapt2/optimize/*.cpp
+    aapt2/process/*.cpp
+    aapt2/split/*.cpp
+    aapt2/text/*.cpp
+    aapt2/util/*.cpp
+    aapt2/java/*.cpp
+    aapt2/trace/*.cpp
+    aapt2/xml/*.cpp
+    aapt2/Debug.cpp
+    aapt2/DominatorTree.cpp
+    aapt2/LoadedApk.cpp
+    aapt2/Resource.cpp
+    aapt2/ResourceParser.cpp
+    aapt2/ResourceTable.cpp
+    aapt2/ResourceUtils.cpp
+    aapt2/ResourceValues.cpp
+    aapt2/SdkConstants.cpp
+    aapt2/ValueTransformer.cpp
 )
 
-file(GLOB_RECURSE PROTO_FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/*.proto
+file(GLOB PROTO_FILES
+    aapt2/*.proto
 )
 
 # สร้าง libaapt2 static library
