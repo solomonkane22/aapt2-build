@@ -26,13 +26,7 @@ jobs:
         run: |
           mkdir -p aapt2
           7z x base-refs_heads_main-tools-aapt2.7z.001 -oaapt2
-      - name: List all source files
-        run: |
-          echo "==== CPP FILES ===="
-          find . -name "*.cpp"
-          echo "==== PROTO FILES ===="
-          find . -name "*.proto"
-    
+      
       - name: Configure CMake
         run: |
           cmake -S . -B build \
