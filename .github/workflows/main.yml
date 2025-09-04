@@ -25,7 +25,7 @@ jobs:
       - name: Extract aapt2 sources
         run: |
           mkdir -p aapt2
-          7z x base-refs_heads_main-tools-aapt2.zip.001 -oaapt2
+          7z x base-refs_heads_main-tools-aapt2.7z.001 -oaapt2
 
       - name: Configure CMake
         run: |
