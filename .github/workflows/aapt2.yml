@@ -1,4 +1,4 @@
-name: Build libaapt2.so (arm64-v8a, 16KB page)
+name: Build libaapt2.so (ARM64, 16KB page)
 
 on:
   workflow_dispatch:
@@ -6,73 +6,36 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    env:
-      ANDROID_ABI: arm64-v8a
-      ANDROID_API: 24
-      BUILD_TYPE: Release
-      PAGE_16K_LDFLAGS: "-Wl,-z,max-page-size=16384"
 
     steps:
-      - name: Checkout empty repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Install deps
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends \
-            build-essential ninja-build cmake unzip git python3
+          sudo apt-get update
+          sudo apt-get install -y ninja-build protobuf-compiler
 
       - name: Setup Android NDK
-        id: ndk
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r26d
-          add-to-path: false
-
-      - name: Clone AAPT2 source (AOSP)
-        run: |
-          git clone --depth=1 https://android.googlesource.com/platform/frameworks/base frameworks-base
+          add-to-path: true
 
       - name: Configure CMake
         run: |
-          NDK="${{ steps.ndk.outputs.ndk-path }}"
-          mkdir -p build && cd build
+          cmake -S . -B build \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-29 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -G Ninja
 
-          cmake -G Ninja \
-            -DANDROID_ABI="${ANDROID_ABI}" \
-            -DANDROID_PLATFORM="android-${ANDROID_API}" \
-            -DANDROID_STL="c++_shared" \
-            -DCMAKE_TOOLCHAIN_FILE="${NDK}/build/cmake/android.toolchain.cmake" \
-            -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-            -DCMAKE_C_FLAGS="-fPIC" \
-            -DCMAKE_CXX_FLAGS="-std=c++17 -fPIC" \
-            -DCMAKE_SHARED_LINKER_FLAGS="${PAGE_16K_LDFLAGS}" \
-            ../frameworks-base/tools/aapt2
-
-      - name: Build AAPT2 as libaapt2.so
-        run: |
-          cd build
-          cmake --build . --config Release --target aapt2
-
-          OUT_DIR="$GITHUB_WORKSPACE/out/${ANDROID_ABI}"
-          mkdir -p "$OUT_DIR"
-
-          # rename output binary → libaapt2.so
-          SO_PATH="$(find . -type f -name 'aapt2' | head -n 1)"
-          if [ -z "$SO_PATH" ]; then
-            echo "::error::ไม่พบ target aapt2"
-            exit 1
-          fi
-
-          cp "$SO_PATH" "$OUT_DIR/libaapt2.so"
-
-          TOOLCHAIN="${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64"
-          "${TOOLCHAIN}/bin/llvm-strip" -S "$OUT_DIR/libaapt2.so" || true
-
-          echo "Built => $OUT_DIR/libaapt2.so"
+      - name: Build
+        run: cmake --build build --config Release
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: libaapt2-${{ env.ANDROID_ABI }}-page16k
-          path: out/${{ env.ANDROID_ABI }}/libaapt2.so
+          name: libaapt2
+          path: build/libaapt2.so
