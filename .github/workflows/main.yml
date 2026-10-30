@@ -6,7 +6,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -17,6 +16,7 @@ jobs:
           sudo apt-get install -y ninja-build protobuf-compiler cmake p7zip-full
 
       - name: Setup Android NDK
+        id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r26d
@@ -26,14 +26,30 @@ jobs:
         run: |
           mkdir -p aapt2
           7z x build.7z.001 -oaapt2
-    
+
+      - name: Fix Broken Headers and Missing Utils
+        run: |
+          # 1. 404 düşen android-base dosyalarını temizle ve AOSP kaynağından doğrularını çek
+          mkdir -p aapt2/android-base
+          curl -fSL https://raw.githubusercontent.com/aosp-mirror/platform_system_libbase/android-14.0.0_r1/include/android-base/expected.h -o aapt2/android-base/expected.h
+          curl -fSL https://raw.githubusercontent.com/aosp-mirror/platform_system_libbase/android-14.0.0_r1/include/android-base/unique_fd.h -o aapt2/android-base/unique_fd.h
+
+          # 2. Eksik olan utils/Unicode.h ve temel utils başlıklarını çek
+          mkdir -p aapt2/utils
+          curl -fSL https://raw.githubusercontent.com/aosp-mirror/platform_system_core/android-14.0.0_r1/libutils/include/utils/Unicode.h -o aapt2/utils/Unicode.h
+          curl -fSL https://raw.githubusercontent.com/aosp-mirror/platform_system_core/android-14.0.0_r1/libutils/include/utils/Errors.h -o aapt2/utils/Errors.h
+          curl -fSL https://raw.githubusercontent.com/aosp-mirror/platform_system_core/android-14.0.0_r1/libutils/include/utils/String8.h -o aapt2/utils/String8.h
+          curl -fSL https://raw.githubusercontent.com/aosp-mirror/platform_system_core/android-14.0.0_r1/libutils/include/utils/String16.h -o aapt2/utils/String16.h
+
       - name: Configure CMake
         run: |
+          # runner üzerindeki varsayılan NDK 27 yerine setup-ndk ile gelen NDK r26d yolunu veriyoruz
           cmake -S . -B build \
-            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DCMAKE_TOOLCHAIN_FILE=${{ steps.setup-ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=arm64-v8a \
             -DANDROID_PLATFORM=android-29 \
             -DCMAKE_BUILD_TYPE=Release \
+            -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
             -G Ninja
 
       - name: Build libaapt2
