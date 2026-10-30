@@ -1,73 +1,39 @@
-name: Build libaapt2.so (ARM64, 16KB page, NDK 27)
+name: Build libaapt2.so (ARM64, 16KB page)
 
 on:
-  push:
-    branches:
-      - master
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          ref: master
 
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build protobuf-compiler cmake p7zip-full git
+          sudo apt-get install -y ninja-build protobuf-compiler cmake p7zip-full
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27d
+          add-to-path: true
 
       - name: Extract aapt2 sources
         run: |
           mkdir -p aapt2
           7z x build.7z.001 -oaapt2
-
-      - name: Fix Broken Headers via AOSP Shallow Clone
+    
+      - name: Configure CMake
         run: |
-          # 1. 404 içeren bozuk dosyaları tamamen sil
-          find aapt2 -name "expected.h" -delete
-          find aapt2 -name "unique_fd.h" -delete
-
-          # 2. Resmi Google Android Git depolarından libbase ve system/core'u klonla
-          git clone --depth 1 -b android-14.0.0_r1 https://android.googlesource.com/platform/system/libbase temp_libbase
-          git clone --depth 1 -b android-14.0.0_r1 https://android.googlesource.com/platform/system/core temp_core
-
-          # 3. İhtiyaç duyulan android-base başlıklarını aapt2 içine kopyala
-          mkdir -p aapt2/android-base
-          cp -r temp_libbase/include/android-base/* aapt2/android-base/
-
-          # 4. İhtiyaç duyulan utils ve cutils başlıklarını kopyala
-          mkdir -p aapt2/utils
-          mkdir -p aapt2/cutils
-          cp -r temp_core/libutils/include/utils/* aapt2/utils/ || true
-          cp -r temp_core/libcutils/include/cutils/* aapt2/cutils/ || true
-
-          # Eğer arşiv aapt2/aapt2 şeklinde iç içe açıldıysa oraya da senkronize et
-          if [ -d "aapt2/aapt2" ]; then
-            mkdir -p aapt2/aapt2/android-base aapt2/aapt2/utils aapt2/aapt2/cutils
-            cp -r temp_libbase/include/android-base/* aapt2/aapt2/android-base/
-            cp -r temp_core/libutils/include/utils/* aapt2/aapt2/utils/ || true
-            cp -r temp_core/libcutils/include/cutils/* aapt2/aapt2/cutils/ || true
-          fi
-
-          # Geçici klonları temizle
-          rm -rf temp_libbase temp_core
-
-      - name: Configure CMake with NDK 27
-        run: |
-          NDK_PATH="/usr/local/lib/android/sdk/ndk/27.3.13750724"
-
           cmake -S . -B build \
-            -DCMAKE_TOOLCHAIN_FILE="$NDK_PATH/build/cmake/android.toolchain.cmake" \
-            -DANDROID_NDK="$NDK_PATH" \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=arm64-v8a \
             -DANDROID_PLATFORM=android-29 \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_FLAGS="-Wno-error -Wno-everything" \
-            -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
             -G Ninja
 
       - name: Build libaapt2
