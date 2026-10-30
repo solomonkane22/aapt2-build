@@ -1,4 +1,4 @@
-name: Build libaapt2.so (ARM64, 16KB page)
+name: Build libaapt2.so (ARM64, 16KB page, NDK 27)
 
 on:
   workflow_dispatch:
@@ -15,40 +15,42 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build protobuf-compiler cmake p7zip-full
 
-      - name: Setup Android NDK
-        id: setup-ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r26d
-          add-to-path: true
-
       - name: Extract aapt2 sources
         run: |
           mkdir -p aapt2
           7z x build.7z.001 -oaapt2
 
-      - name: Fix Broken Headers and Missing Utils
+      - name: Fix 404 Headers and Add Missing Utils
         run: |
-          # 1. 404 düşen android-base dosyalarını temizle ve AOSP kaynağından doğrularını çek
+          # 1. 404 içeren bozuk dosyaları temizle
+          rm -f aapt2/android-base/expected.h
+          rm -f aapt2/android-base/unique_fd.h
+
           mkdir -p aapt2/android-base
+          mkdir -p aapt2/utils
+
+          # 2. AOSP Android 14/15 uyumlu temiz başlıkları çek
           curl -fSL https://raw.githubusercontent.com/aosp-mirror/platform_system_libbase/android-14.0.0_r1/include/android-base/expected.h -o aapt2/android-base/expected.h
           curl -fSL https://raw.githubusercontent.com/aosp-mirror/platform_system_libbase/android-14.0.0_r1/include/android-base/unique_fd.h -o aapt2/android-base/unique_fd.h
 
-          # 2. Eksik olan utils/Unicode.h ve temel utils başlıklarını çek
-          mkdir -p aapt2/utils
+          # 3. Eksik utils başlıklarını çek
           curl -fSL https://raw.githubusercontent.com/aosp-mirror/platform_system_core/android-14.0.0_r1/libutils/include/utils/Unicode.h -o aapt2/utils/Unicode.h
           curl -fSL https://raw.githubusercontent.com/aosp-mirror/platform_system_core/android-14.0.0_r1/libutils/include/utils/Errors.h -o aapt2/utils/Errors.h
           curl -fSL https://raw.githubusercontent.com/aosp-mirror/platform_system_core/android-14.0.0_r1/libutils/include/utils/String8.h -o aapt2/utils/String8.h
           curl -fSL https://raw.githubusercontent.com/aosp-mirror/platform_system_core/android-14.0.0_r1/libutils/include/utils/String16.h -o aapt2/utils/String16.h
 
-      - name: Configure CMake
+      - name: Configure CMake with NDK 27
         run: |
-          # runner üzerindeki varsayılan NDK 27 yerine setup-ndk ile gelen NDK r26d yolunu veriyoruz
+          # Runner üzerindeki hazır NDK 27 yolunu kullanıyoruz
+          NDK_PATH="/usr/local/lib/android/sdk/ndk/27.3.13750724"
+
           cmake -S . -B build \
-            -DCMAKE_TOOLCHAIN_FILE=${{ steps.setup-ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK_PATH/build/cmake/android.toolchain.cmake" \
+            -DANDROID_NDK="$NDK_PATH" \
             -DANDROID_ABI=arm64-v8a \
             -DANDROID_PLATFORM=android-29 \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS="-Wno-error" \
             -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON \
             -G Ninja
 
